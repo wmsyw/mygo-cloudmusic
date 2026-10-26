@@ -36,10 +36,12 @@ func radioLabel(name string) string {
 	return "私人 FM"
 }
 
-func playable(tracks []netease.Track) []netease.Track {
+// playableTracks keeps the tracks that may play, with allowUnblock letting
+// the songs NetEase won't serve through.
+func playableTracks(tracks []netease.Track, allowUnblock bool) []netease.Track {
 	var out []netease.Track
 	for _, t := range tracks {
-		if t.Playable() {
+		if t.Playable() || allowUnblock {
 			out = append(out, t)
 		}
 	}
@@ -79,6 +81,7 @@ func (a *app) radioFeed(name string) func(got func([]netease.Track)) {
 			got(nil)
 			return
 		}
+		allow := a.settings.canUnblock()
 		go func() {
 			// The FM gives a song or three at a time, some of them VIP
 			// songs the listener may not play: ask again for those.
@@ -88,7 +91,7 @@ func (a *app) radioFeed(name string) func(got func([]netease.Track)) {
 				if err != nil {
 					break
 				}
-				tracks = playable(more)
+				tracks = playableTracks(more, allow)
 			}
 			a.post(func() { got(tracks) })
 		}()
@@ -169,13 +172,14 @@ func (a *app) startHeartMode() {
 	}
 	liked := a.playlists[pid]
 	a.radioStarting = heartRadio
+	allow := a.settings.canUnblock()
 	go func() {
 		if seed == nil {
 			if liked == nil {
 				liked, _ = netease.PlaylistDetail(pid)
 			}
 			if liked != nil {
-				if ok := playable(liked.Tracks); len(ok) > 0 {
+				if ok := playableTracks(liked.Tracks, allow); len(ok) > 0 {
 					seed = &ok[rand.IntN(len(ok))]
 				}
 			}
@@ -194,7 +198,7 @@ func (a *app) startHeartMode() {
 				a.toast = "心动模式暂时无法开启，请稍后再试"
 				return
 			}
-			more = playable(more)
+			more = playableTracks(more, allow)
 			if fromPlaying && a.pl.Current() != nil && a.pl.Current().ID == seed.ID {
 				a.pl.RadioFrom(heartRadio, more, a.radioFeed(heartRadio))
 				return

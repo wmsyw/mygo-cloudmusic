@@ -1,6 +1,7 @@
 package player
 
 import (
+	"errors"
 	"math"
 	"math/rand/v2"
 	"time"
@@ -10,6 +11,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/unblock"
 )
 
 type RepeatMode int
@@ -29,6 +31,10 @@ type Player struct {
 	// Normalize reports whether to even out the loudness of tracks, as
 	// the settings say.
 	Normalize func() bool
+	// Unblock returns the third-party sources to resolve tracks NetEase
+	// won't serve; nil or empty turns it off. It reads mutable settings,
+	// so it is called on the main thread, never on a goroutine.
+	Unblock func() []unblock.Source
 	// Cache keeps the songs played, if set.
 	Cache *Cache
 	// Changed, if set, hears that what plays, where it is or whether it
@@ -600,12 +606,15 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 			}
 		})
 	}()
+	// The settings these come from live on the main thread, so they are
+	// read here rather than on the goroutine that opens the audio.
+	level := "exhigh"
+	if p.Quality != nil {
+		level = p.Quality()
+	}
+	sources := p.unblockSources()
 	go func() {
-		level := "exhigh"
-		if p.Quality != nil {
-			level = p.Quality()
-		}
-		info, s, err := p.open(t, level)
+		info, s, err := p.open(t, level, sources)
 		p.post(func() {
 			if gen != p.gen {
 				if s != nil {
@@ -616,8 +625,13 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 			p.loading = false
 			if err != nil {
 				p.err = err.Error()
-				if err == netease.ErrUnavailable {
+				if errors.Is(err, netease.ErrUnavailable) {
 					p.err = "这首歌需要 VIP 才能播放"
+					// With sources on, the listener expects them tried,
+					// and told when they had nothing either.
+					if len(sources) > 0 {
+						p.err = "这首歌暂时无法播放，第三方音源也没有找到"
+					}
 				}
 				// Skip what cannot play, unless nothing in the queue can.
 				if skipped+1 < len(p.order) {
@@ -662,15 +676,33 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	}()
 }
 
-// open opens track t's audio at level: kept in the cache, or else
-// streamed into it, and kept once it has all come in.
-func (p *Player) open(t netease.Track, level string) (*netease.Stream, stream, error) {
-	dl, info, ok := p.Cache.lookup(t.ID, level)
+// open opens track t's audio at level, with the sources the listener
+// allows: kept in the cache, or else streamed into it, and kept once it has
+// all come in.
+func (p *Player) open(t netease.Track, level string, sources []unblock.Source) (*netease.Stream, stream, error) {
+	dl, info, ok := p.Cache.lookup(t.ID, level, sources)
 	if !ok {
 		var err error
 		info, err = netease.SongURL(t.ID, level)
 		if err != nil {
-			return nil, nil, err
+			// Only a song NetEase won't serve falls back, and only with a
+			// source turned on: another failure is no reason to go looking
+			// for the song elsewhere.
+			if errors.Is(err, netease.ErrUnavailable) && len(sources) > 0 {
+				if r, uerr := unblock.Resolve(t, sources); uerr == nil && r != nil {
+					info = &netease.Stream{
+						URL:    r.URL,
+						Size:   r.Size,
+						Type:   "mp3",
+						Level:  thirdPartyLevel(level),
+						Source: string(r.Source),
+					}
+					err = nil
+				}
+			}
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		dl = p.Cache.download(t.ID, info)
 	}
@@ -680,6 +712,26 @@ func (p *Player) open(t netease.Track, level string) (*netease.Stream, stream, e
 		return nil, nil, err
 	}
 	return info, s, nil
+}
+
+// thirdPartyLevel is the level a fallback stream is kept at: the one
+// asked for, but no higher than exhigh, as the third-party sources serve
+// MP3 and a lossless key would both claim a losslessness they never had
+// and keep the MP3 for a listener who later can play the FLAC.
+func thirdPartyLevel(level string) string {
+	if level == "lossless" || level == "hires" {
+		return "exhigh"
+	}
+	return level
+}
+
+// unblockSources returns the third-party sources the listener allows, or
+// nil.
+func (p *Player) unblockSources() []unblock.Source {
+	if p.Unblock == nil {
+		return nil
+	}
+	return p.Unblock()
 }
 
 // Session is where playback was left, to pick up again.

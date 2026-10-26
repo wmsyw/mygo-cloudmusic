@@ -9,6 +9,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/unblock"
 )
 
 var white = ui.RGB(255, 255, 255)
@@ -252,8 +253,16 @@ func (a *app) radioChip(c *ui.Context, name string) {
 	}
 }
 
-// qualityBadge marks a lossless stream, as it plays.
+// qualityBadge marks the stream playing: where it comes from, when a
+// third party serves it, as none of NetEase's levels describe such a
+// stream and its level would claim a losslessness it never had, or else
+// its lossless level.
 func qualityBadge(c *ui.Context, st *netease.Stream) {
+	if st != nil && st.Source != "" {
+		ui.Text(c, unblock.Source(st.Source).Label()).FontSize(9.5).FontWeight(800).LetterSpacing(0.6).TextColor(ui.Hex("#9ad1f5")).
+			Padding(1, 6).Radius(4).Border(1, ui.Hex("#9ad1f5").Alpha(0.55))
+		return
+	}
 	if st == nil || !netease.Lossless(st.Level) {
 		return
 	}
@@ -541,7 +550,7 @@ func (a *app) queuePane(c *ui.Context) {
 		case row.Hovered():
 			row.Background(white.Alpha(0.08))
 		}
-		if !tr.Playable() {
+		if !a.playable(tr) {
 			row.Opacity(0.4)
 		}
 		row.Children(func() {
@@ -552,7 +561,7 @@ func (a *app) queuePane(c *ui.Context) {
 			})
 			ui.Text(c, clock(tr.Length())).FontSize(12).FontFeatures("tnum").TextColor(white.Alpha(0.4))
 		})
-		if row.Clicked() && tr.Playable() && !playing {
+		if row.Clicked() && a.playable(tr) && !playing {
 			pl.Jump(i)
 		}
 	}).Grow(1).Padding(8, 0, 40, 0).Gap(2)

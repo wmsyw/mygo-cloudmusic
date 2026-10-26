@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/audio"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/unblock"
 )
 
 func TestPlayEmptyQueue(t *testing.T) {
@@ -172,12 +173,12 @@ func TestCache(t *testing.T) {
 		c.keep(id, st, f.Name(), int64(n))
 	}
 	store(1, &netease.Stream{Level: "lossless", Type: "flac", Gain: -3}, 100)
-	dl, st, ok := c.lookup(1, "exhigh")
+	dl, st, ok := c.lookup(1, "exhigh", nil)
 	if !ok || dl.size != 100 || st.Type != "flac" || st.Gain != -3 {
 		t.Fatalf("lookup: %v %+v", ok, st)
 	}
 	dl.Close()
-	if _, _, ok := c.lookup(1, "hires"); ok {
+	if _, _, ok := c.lookup(1, "hires", nil); ok {
 		t.Error("found a lossless song for Hi-Res")
 	}
 	old := time.Now().Add(-time.Hour)
@@ -186,10 +187,10 @@ func TestCache(t *testing.T) {
 	store(3, &netease.Stream{Level: "exhigh", Type: "mp3"}, 100)
 	store(4, &netease.Stream{Level: "exhigh", Type: "mp3"}, 100)
 	store(5, &netease.Stream{Level: "exhigh", Type: "mp3"}, 100)
-	if _, _, ok := c.lookup(1, "standard"); ok {
+	if _, _, ok := c.lookup(1, "standard", nil); ok {
 		t.Error("kept the song played longest ago")
 	}
-	if dl, _, ok := c.lookup(5, "standard"); !ok {
+	if dl, _, ok := c.lookup(5, "standard", nil); !ok {
 		t.Error("dropped the song just kept")
 	} else {
 		dl.Close()
@@ -200,6 +201,48 @@ func TestCache(t *testing.T) {
 	c.Clear()
 	if n := c.Size(); n != 0 {
 		t.Errorf("cleared to %d", n)
+	}
+}
+
+// A cached third-party file plays only while its source is on: turned
+// off, or with only NetEase's own allowed, it must not play.
+func TestCacheUnblockSource(t *testing.T) {
+	dir := t.TempDir()
+	c := NewCache(dir, 400)
+	st := &netease.Stream{Level: "exhigh", Type: "mp3", Source: "kuwo"}
+	f := c.part(st)
+	f.Write(make([]byte, 100))
+	f.Close()
+	if _, kept := c.keep(1, st, f.Name(), 100); !kept {
+		t.Fatal("not kept")
+	}
+
+	if _, _, ok := c.lookup(1, "exhigh", nil); ok {
+		t.Error("played a third-party song with its source off")
+	}
+	if dl, _, ok := c.lookup(1, "exhigh", []unblock.Source{unblock.Kuwo}); !ok {
+		t.Error("did not play a song of a source turned on")
+	} else {
+		dl.Close()
+	}
+	if _, _, ok := c.lookup(1, "exhigh", []unblock.Source{unblock.Kugou}); ok {
+		t.Error("played a song of another source")
+	}
+}
+
+// A fallback MP3 is never kept under a lossless key: it cannot be the
+// FLAC a listener asked for, and a later VIP play must not get it back.
+func TestThirdPartyLevel(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"standard", "standard"},
+		{"higher", "higher"},
+		{"exhigh", "exhigh"},
+		{"lossless", "exhigh"},
+		{"hires", "exhigh"},
+	} {
+		if got := thirdPartyLevel(c.in); got != c.want {
+			t.Errorf("%s: %s, want %s", c.in, got, c.want)
+		}
 	}
 }
 

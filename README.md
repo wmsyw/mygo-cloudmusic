@@ -8,6 +8,7 @@
 - 每日推荐、推荐歌单、排行榜、我的歌单、搜索
 - 私人 FM（推荐 / 熟悉 / 探索）与心动模式
 - 边下边播，支持标准 / 较高 / 极高 / 无损（FLAC）/ Hi-Res 音质
+- 灰色歌曲解锁：网易云无版权或下架的歌曲，从 pyncmd、酷我、酷狗等第三方音源匹配播放（默认开启，可在设置中关闭）
 - 听过的歌曲缓存在本机，再次播放无需等待
 - 音量均衡，暂停与继续时淡出淡入，拖动进度无杂音
 - 退出后再打开，从上次的播放队列与进度继续
@@ -22,7 +23,7 @@
 
 ```bash
 go tool mygo dev     # 开发模式运行
-go tool mygo build   # 打包到 build/
+go tool mygo build   # 打包到 build/，ad-hoc 签名，无需配置证书
 go test ./...        # 运行测试
 ```
 
@@ -31,6 +32,7 @@ go test ./...        # 运行测试
 - [MyGo](https://github.com/egoist/mygo)：原生 UI 与应用框架
 - [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)：eapi 加密与登录流程的参考
 - [folia-major](https://github.com/chthollyphile/folia-major)：歌词动画效果的参考
+- [UnblockNeteaseMusic](https://github.com/UnblockNeteaseMusic/server)：灰色歌曲的第三方音源与酷我查询加密的参考；酷我加密的移植按 LGPL-3.0 授权，许可证见 `internal/unblock/COPYING.LESSER`
 
 本项目与网易云音乐官方无关，音乐版权归各权利人所有。
 

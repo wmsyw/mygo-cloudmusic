@@ -6,7 +6,18 @@ import (
 	"path/filepath"
 
 	"github.com/egoist/mygo"
+
+	"netease-music-mygo/internal/unblock"
 )
+
+// unlockSettings say whether songs NetEase won't play are matched from
+// third-party sources, and which sources to try.
+type unlockSettings struct {
+	Enabled bool `json:"enabled"`
+	Pyncmd  bool `json:"pyncmd"`
+	Kuwo    bool `json:"kuwo"`
+	Kugou   bool `json:"kugou"`
+}
 
 // settings are the listener's choices, kept in settings.json in the user
 // data directory.
@@ -49,12 +60,54 @@ type settings struct {
 	// CacheMB is how many megabytes the songs kept on disk may take; 0
 	// keeps none.
 	CacheMB int `json:"cacheMB"`
+	// Unlock matches songs NetEase won't play from third-party sources.
+	Unlock unlockSettings `json:"unlock"`
 
 	path string // where they were loaded from, and are saved to
 }
 
 func defaultSettings() settings {
-	return settings{NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true, CacheMB: 2048}
+	return settings{
+		NotchActivity: true,
+		Quality:       "exhigh",
+		Appearance:    "system",
+		Volume:        0.8,
+		Normalize:     true,
+		CacheMB:       2048,
+		Unlock:        unlockSettings{Enabled: true, Pyncmd: true, Kuwo: true, Kugou: true},
+	}
+}
+
+// canUnblock reports whether the listener lets third-party sources serve
+// the songs NetEase won't, and allows at least one of them.
+func (s settings) canUnblock() bool {
+	return s.Unlock.Enabled && (s.Unlock.Pyncmd || s.Unlock.Kuwo || s.Unlock.Kugou)
+}
+
+// unblockSources returns the sources the listener allows, in the order
+// they are tried: none while unlocking is off, whatever the sources say.
+func (s settings) unblockSources() []unblock.Source {
+	if !s.Unlock.Enabled {
+		return nil
+	}
+	var out []unblock.Source
+	for _, src := range unblock.Sources {
+		switch src {
+		case unblock.Pyncmd:
+			if s.Unlock.Pyncmd {
+				out = append(out, src)
+			}
+		case unblock.Kuwo:
+			if s.Unlock.Kuwo {
+				out = append(out, src)
+			}
+		case unblock.Kugou:
+			if s.Unlock.Kugou {
+				out = append(out, src)
+			}
+		}
+	}
+	return out
 }
 
 func settingsPath() (string, error) {

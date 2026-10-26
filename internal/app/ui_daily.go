@@ -340,7 +340,7 @@ func (a *app) dailyPlayButton(c *ui.Context, songs []netease.Track, ours, playin
 		if ours {
 			a.pl.TogglePlay()
 		} else {
-			a.pl.PlayQueue(songs, firstPlayable(songs))
+			a.pl.PlayQueue(songs, a.firstPlayable(songs))
 		}
 	}
 }
@@ -413,8 +413,10 @@ func (a *app) dailyStack(c *ui.Context, songs []netease.Track, fanned bool, out 
 			// Light on its gloss, and its edge.
 			ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Radius(12).PassThrough().Border(1, white.Alpha(0.14)).
 				LinearGradient(ui.LinearGradient{Angle: 145, Stops: []ui.GradientStop{
-					{Color: white.Alpha(0.22), At: 0}, {Color: white.Alpha(0), At: 0.42},
-					{Color: ui.RGBA(0, 0, 0, 0), At: 0.7}, {Color: ui.RGBA(0, 0, 0, 0.18), At: 1},
+					{Color: white.Alpha(0.22), At: 0},
+					{Color: white.Alpha(0), At: 0.42},
+					{Color: ui.RGBA(0, 0, 0, 0), At: 0.7},
+					{Color: ui.RGBA(0, 0, 0, 0.18), At: 1},
 				}})
 		})
 	})
@@ -436,8 +438,12 @@ func drawRecord(p *ui.Painter, r ui.Rect, bmp *ui.Bitmap, angle float32) {
 	}
 	// The light on it, in two opposite fans.
 	p.FillConicGradient(r, ui.ConicGradient{Angle: 20, Stops: []ui.GradientStop{
-		{Color: white.Alpha(0), At: 0}, {Color: white.Alpha(0.13), At: 0.08}, {Color: white.Alpha(0), At: 0.2},
-		{Color: white.Alpha(0), At: 0.5}, {Color: white.Alpha(0.13), At: 0.58}, {Color: white.Alpha(0), At: 0.7},
+		{Color: white.Alpha(0), At: 0},
+		{Color: white.Alpha(0.13), At: 0.08},
+		{Color: white.Alpha(0), At: 0.2},
+		{Color: white.Alpha(0), At: 0.5},
+		{Color: white.Alpha(0.13), At: 0.58},
+		{Color: white.Alpha(0), At: 0.7},
 		{Color: white.Alpha(0), At: 1},
 	}}, d/2)
 	p.Stroke(r, white.Alpha(0.1), d/2, 1)
@@ -501,13 +507,13 @@ func (a *app) dailyPage(c *ui.Context) {
 						if a.pl.Shuffle() {
 							a.pl.ToggleShuffle()
 						}
-						a.pl.PlayQueue(songs, firstPlayable(songs))
+						a.pl.PlayQueue(songs, a.firstPlayable(songs))
 					}
 					if pillButton(c.Key("shuffle"), iconShuffle, "随机播放", p.hover.Over(p.bg), p.text).Clicked() {
 						if !a.pl.Shuffle() {
 							a.pl.ToggleShuffle()
 						}
-						a.pl.PlayQueue(songs, firstPlayable(songs))
+						a.pl.PlayQueue(songs, a.firstPlayable(songs))
 					}
 				})
 			})

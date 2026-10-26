@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/unblock"
 )
 
 // Cache keeps the songs played on disk, so that they play again at once,
@@ -40,8 +41,9 @@ func (c *Cache) SetLimit(limit int64) {
 func cacheKey(id int64, level string) string { return fmt.Sprintf("%d-%s", id, level) }
 
 // lookup returns a song kept at level or a better one, open to read, with
-// its stream.
-func (c *Cache) lookup(id int64, level string) (*download, *netease.Stream, bool) {
+// its stream, but never a third-party file whose source is off: a source
+// the listener turned off is never used, whatever is kept.
+func (c *Cache) lookup(id int64, level string, sources []unblock.Source) (*download, *netease.Stream, bool) {
 	if c == nil {
 		return nil, nil, false
 	}
@@ -54,6 +56,11 @@ func (c *Cache) lookup(id int64, level string) (*download, *netease.Stream, bool
 		}
 		var st netease.Stream
 		if json.Unmarshal(meta, &st) != nil {
+			continue
+		}
+		// A third-party file is never used when its source is off; with no
+		// sources, only NetEase's own files play.
+		if st.Source != "" && !slices.Contains(sources, unblock.Source(st.Source)) {
 			continue
 		}
 		path := filepath.Join(c.dir, key+"."+st.Type)

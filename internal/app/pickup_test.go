@@ -9,7 +9,8 @@ import (
 
 // A login picks up the last stretch of listening on one device, oldest
 // first: it ends where the device changes or the listener stopped for half
-// an hour, and leaves out songs they may not play and songs played again.
+// an hour, and leaves out songs they may not play, unless third-party
+// sources may serve them, and songs played again.
 func TestLastStretch(t *testing.T) {
 	now := time.Date(2026, 10, 26, 22, 0, 0, 0, time.Local)
 	play := func(id int64, ago time.Duration, device string, fee int) netease.Play {
@@ -23,7 +24,7 @@ func TestLastStretch(t *testing.T) {
 		play(2, 30*time.Minute, "android", 0),
 		play(1, 70*time.Minute, "android", 0), // after a break
 	}
-	songs, last, ok := lastStretch(plays, now)
+	songs, last, ok := lastStretch(plays, now, false)
 	var ids []int64
 	for _, s := range songs {
 		ids = append(ids, s.ID)
@@ -35,15 +36,20 @@ func TestLastStretch(t *testing.T) {
 		t.Errorf("heard %q", got)
 	}
 
+	// Allowed third-party sources, the VIP song plays too.
+	if songs, _, _ := lastStretch(plays, now, true); len(songs) != 4 || songs[2].ID != 4 {
+		t.Errorf("didn't pick up the VIP song: %v", songs)
+	}
+
 	plays[1] = play(4, 6*time.Minute, "osx", 0)
-	if songs, _, _ := lastStretch(plays, now); len(songs) != 1 || songs[0].ID != 5 {
+	if songs, _, _ := lastStretch(plays, now, false); len(songs) != 1 || songs[0].ID != 5 {
 		t.Errorf("crossed devices: %v", songs)
 	}
 	plays[0] = play(5, 4, "android", 1)
-	if songs, last, _ := lastStretch(plays[:1], now); len(songs) != 0 || last.Track.ID != 0 {
+	if songs, last, _ := lastStretch(plays[:1], now, false); len(songs) != 0 || last.Track.ID != 0 {
 		t.Errorf("picked a song that may not play: %v", songs)
 	}
-	if _, _, ok := lastStretch([]netease.Play{play(1, 8*24*time.Hour, "iphone", 0)}, now); ok {
+	if _, _, ok := lastStretch([]netease.Play{play(1, 8*24*time.Hour, "iphone", 0)}, now, false); ok {
 		t.Error("picked up a week-old song")
 	}
 }

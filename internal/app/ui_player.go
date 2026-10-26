@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/unblock"
 )
 
 // scrubState is a progress bar's own: the value dragged, while it is, and
@@ -94,8 +95,10 @@ func (a *app) scrubber(c *ui.Context, st *scrubState, track, fill ui.Color, heig
 		played := ui.Rect{X: r.X, Y: y, W: max(thick, head-r.X), H: thick}
 		if smoking > 0.01 {
 			// A streak of light, brightest at the head.
-			p.FillGradient(played, ui.LinearGradient{Angle: 90, Oklab: true,
-				From: fill.Mix(smoke, smoking).Alpha(0.3), To: fill.Mix(smoke, 0.8*smoking)}, thick/2)
+			p.FillGradient(played, ui.LinearGradient{
+				Angle: 90, Oklab: true,
+				From: fill.Mix(smoke, smoking).Alpha(0.3), To: fill.Mix(smoke, 0.8*smoking),
+			}, thick/2)
 			lv, live := pl.Levels()
 			st.level.step(p.Now(), lv, live)
 			bass := st.level.group(0, 6)
@@ -389,6 +392,11 @@ func (a *app) playerBar(c *ui.Context) {
 				ui.Column(c).Shrink(1).MinWidth(0).Gap(3).Children(func() {
 					ui.Text(c, tr.Name).FontSize(13.5).FontWeight(600).SingleLine()
 					sub := tr.ArtistNames()
+					if st := pl.Stream(); st != nil && st.Source != "" {
+						// A stream from elsewhere says so, after the artist:
+						// the picked up, loading and error lines take over.
+						sub += " · " + unblock.Source(st.Source).Label()
+					}
 					color := p.muted
 					switch {
 					case a.picked.id == tr.ID:

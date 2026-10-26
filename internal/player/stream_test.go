@@ -205,7 +205,7 @@ func TestStreamIntoCache(t *testing.T) {
 	if d := maxDiff(got, ref); len(got) != len(ref) || d != 0 {
 		t.Errorf("played %d of %d samples, off by up to %.4f", len(got), len(ref), d)
 	}
-	if dl, _, ok := c.lookup(1, "exhigh"); !ok {
+	if dl, _, ok := c.lookup(1, "exhigh", nil); !ok {
 		t.Error("not kept")
 	} else {
 		dl.Close()
@@ -222,7 +222,7 @@ func TestStreamIntoCache(t *testing.T) {
 	if parts, _ := filepath.Glob(filepath.Join(dir, "*.part")); len(parts) != 0 {
 		t.Errorf("left %v", parts)
 	}
-	if _, _, ok := c.lookup(2, "exhigh"); ok {
+	if _, _, ok := c.lookup(2, "exhigh", nil); ok {
 		t.Error("kept a song cut short")
 	}
 }

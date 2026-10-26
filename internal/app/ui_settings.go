@@ -34,10 +34,15 @@ func (a *app) openSettings() {
 	a.settingsWin.OnClosed(func() { a.settingsWin = nil })
 }
 
+// applyTheme gives the windows the appearance the settings name. Tests
+// replace it: the theme waits on the app's main thread, which a test does
+// not run.
+var applyTheme = func(s settings) { s.applyAppearance() }
+
 // changed applies the settings everywhere and keeps them.
 func (a *app) changed() {
 	a.settings.save()
-	a.settings.applyAppearance()
+	applyTheme(a.settings)
 	if a.notch != nil {
 		a.notch.setEnabled(a.settings.Notch)
 	}
@@ -110,6 +115,28 @@ func (a *app) settingsView(c *ui.Context) {
 					a.changed()
 				}
 			})
+			row("灰色歌曲解锁", "无版权或下架的歌曲将从第三方音源匹配播放", func() {
+				if ui.Switch(c.Key("unlock"), &s.Unlock.Enabled).Label("灰色歌曲解锁").Changed() {
+					a.changed()
+				}
+			})
+			if s.Unlock.Enabled {
+				row("pyncmd", "GDStudio 的网易云音源，优先匹配原始文件", func() {
+					if ui.Switch(c.Key("unlock-pyncmd"), &s.Unlock.Pyncmd).Label("pyncmd").Changed() {
+						a.changed()
+					}
+				})
+				row("酷我音乐", "通常能播放完整的歌曲", func() {
+					if ui.Switch(c.Key("unlock-kuwo"), &s.Unlock.Kuwo).Label("酷我音乐").Changed() {
+						a.changed()
+					}
+				})
+				row("酷狗音乐", "免费歌曲可播放", func() {
+					if ui.Switch(c.Key("unlock-kugou"), &s.Unlock.Kugou).Label("酷狗音乐").Changed() {
+						a.changed()
+					}
+				})
+			}
 			row("间奏时显示热评", "前奏、间奏与尾奏时，歌词处换成这首歌的热门评论", func() {
 				if ui.Switch(c.Key("hot-comments"), &s.HotComments).Label("间奏时显示热评").Changed() {
 					a.changed()

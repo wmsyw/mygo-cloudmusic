@@ -321,6 +321,9 @@ type Stream struct {
 	Type string `json:"type"`
 	// Level is the level served, which may be below the one asked for.
 	Level string `json:"level"`
+	// Source names the third-party source an unblocked stream came from,
+	// or "" for NetEase's own.
+	Source string `json:"source,omitempty"`
 	// Gain is how many dB to change the track by to sound as loud as
 	// others, and Peak its loudest sample, 1 at full scale, or 0 if
 	// unknown.

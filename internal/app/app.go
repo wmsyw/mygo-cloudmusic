@@ -9,6 +9,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/unblock"
 )
 
 type pageKind int
@@ -40,16 +41,17 @@ type app struct {
 	history []route
 	forward []route // the pages gone back from, the last first to go to
 
-	profile      *netease.Profile
-	mine, saved  []netease.Playlist // the listener's playlists: made, and saved
-	recPlaylists []netease.Playlist // the day's playlists picked for the listener
-	login        loginState
-	accountOpen  bool           // the dropdown of the account row shows
-	naming       nameDialog     // the name of a playlist asked for
-	deleting     deleteDialog   // whether to delete a playlist, asked
-	liked        map[int64]bool // the songs the listener likes
-	toast        string         // a message to show once
-	picked       pickedUp       // the song a login picked up, waiting to play
+	profile       *netease.Profile
+	mine, saved   []netease.Playlist // the listener's playlists: made, and saved
+	recPlaylists  []netease.Playlist // the day's playlists picked for the listener
+	login         loginState
+	accountOpen   bool           // the dropdown of the account row shows
+	naming        nameDialog     // the name of a playlist asked for
+	deleting      deleteDialog   // whether to delete a playlist, asked
+	liked         map[int64]bool // the songs the listener likes
+	toast         string         // a message to show once
+	picked        pickedUp       // the song a login picked up, waiting to play
+	noticedSource int64          // the track whose third-party source was announced
 
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card
@@ -174,8 +176,19 @@ func Run() error {
 		a.pl = player.New(a.post)
 		a.pl.Quality = func() string { return a.settings.Quality }
 		a.pl.Normalize = func() bool { return a.settings.Normalize }
+		a.pl.Unblock = func() []unblock.Source { return a.settings.unblockSources() }
 		a.pl.Cache = newSongCache(a.settings.CacheMB)
-		a.pl.Changed = a.keepSession
+		a.pl.Changed = func() {
+			a.keepSession()
+			// Say it once per track, as it starts playing from elsewhere:
+			// the listener should know this is not the copy they expect.
+			if t := a.pl.Current(); t != nil && a.noticedSource != t.ID {
+				if st := a.pl.Stream(); st != nil && st.Source != "" {
+					a.noticedSource = t.ID
+					a.toast = "已使用第三方音源：" + unblock.Label(st.Source)
+				}
+			}
+		}
 		a.volume = a.settings.Volume
 		a.pl.SetVolume(a.volume)
 		a.win = mygo.NewWindow(mygo.WindowOptions{

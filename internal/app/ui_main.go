@@ -384,7 +384,7 @@ func (a *app) loadHome() {
 func (a *app) loadPlaylist(id int64, thenPlay bool) {
 	if pl := a.playlists[id]; pl != nil {
 		if thenPlay {
-			a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+			a.pl.PlayQueue(pl.Tracks, a.firstPlayable(pl.Tracks))
 		}
 		return
 	}
@@ -403,15 +403,23 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 			}
 			a.playlists[id] = pl
 			if thenPlay {
-				a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+				a.pl.PlayQueue(pl.Tracks, a.firstPlayable(pl.Tracks))
 			}
 		})
 	}()
 }
 
-func firstPlayable(tracks []netease.Track) int {
+// playable reports whether tr may play: NetEase serves it, or a
+// third-party source may.
+func (a *app) playable(t *netease.Track) bool {
+	return t.Playable() || a.settings.canUnblock()
+}
+
+// firstPlayable returns the index of the first track that may play, or 0
+// when none may.
+func (a *app) firstPlayable(tracks []netease.Track) int {
 	for i := range tracks {
-		if tracks[i].Playable() {
+		if a.playable(&tracks[i]) {
 			return i
 		}
 	}
