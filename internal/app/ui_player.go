@@ -391,12 +391,8 @@ func (a *app) playerBar(c *ui.Context) {
 				})
 				ui.Column(c).Shrink(1).MinWidth(0).Gap(3).Children(func() {
 					ui.Text(c, tr.Name).FontSize(13.5).FontWeight(600).SingleLine()
-					sub := tr.ArtistNames()
-					if st := pl.Stream(); st != nil && st.Source != "" {
-						// A stream from elsewhere says so, after the artist:
-						// the picked up, loading and error lines take over.
-						sub += " · " + unblock.Source(st.Source).Label()
-					}
+					// What it is waiting on shows in place of the artists.
+					var sub string
 					color := p.muted
 					switch {
 					case a.picked.id == tr.ID:
@@ -406,7 +402,19 @@ func (a *app) playerBar(c *ui.Context) {
 					case pl.Err() != "":
 						sub, color = pl.Err(), p.accent
 					}
-					ui.Text(c, sub).FontSize(12).TextColor(color).SingleLine()
+					if sub == "" {
+						if st := pl.Stream(); st != nil && st.Source != "" {
+							// A stream from elsewhere says so, after the artists.
+							ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(1).MinWidth(0).Children(func() {
+								a.artistLinks(c, tr, p.muted, p.text).FontSize(12).SingleLine()
+								ui.Text(c, "· "+unblock.Source(st.Source).Label()).FontSize(12).TextColor(p.muted).SingleLine()
+							})
+						} else {
+							a.artistLinks(c, tr, p.muted, p.text).FontSize(12).SingleLine()
+						}
+					} else {
+						ui.Text(c, sub).FontSize(12).TextColor(color).SingleLine()
+					}
 				})
 			})
 			if info.Clicked() {
@@ -431,7 +439,11 @@ func (a *app) playerBar(c *ui.Context) {
 			if a.nowPlaying {
 				lyr = p.accent
 			}
-			if iconButton(c.Key("lyrics"), iconLyrics, 16, lyr, "歌词").Clicked() && tr != nil {
+			label := "歌词"
+			if tr != nil && tr.ProgramID != 0 {
+				label = "节目简介"
+			}
+			if iconButton(c.Key("lyrics"), iconLyrics, 16, lyr, label).Clicked() && tr != nil {
 				a.nowPlaying, a.npPane = true, a.lyricsPaneChosen()
 			}
 			if iconButton(c.Key("queue"), iconQueue, 16, p.muted, "播放队列").Clicked() && tr != nil {

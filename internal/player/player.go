@@ -356,6 +356,30 @@ func (p *Player) Downloaded() (float64, bool) {
 	return dl.Progress(), true
 }
 
+// Audio is the current track's sound decoded apart from what plays, as
+// OpenAudio opens it: interleaved stereo at its rate, read as it
+// downloads.
+type Audio interface {
+	SampleRate() int
+	Channels() int
+	Read(dst []float32) (int, error)
+	// SetPosition goes to a frame, of SampleRate a second.
+	SetPosition(frame int64) error
+	Close() error
+}
+
+// OpenAudio opens the current track's sound again, for decoding apart
+// from what plays, as for transcribing an episode. It reads the same
+// download, waiting for what has not come in, and fails once the track
+// changes. It works on any goroutine once opened; close it when done.
+func (p *Player) OpenAudio() (Audio, error) {
+	if p.stream == nil || p.track == nil {
+		return nil, errors.New("player: nothing loaded")
+	}
+	dl, _ := p.stream.source()
+	return openShared(dl, p.track.Duration)
+}
+
 // PlayOrder returns the queue's indices in play order, and where the
 // current track is among them, -1 for none.
 func (p *Player) PlayOrder() ([]int, int) { return p.order, p.at }
@@ -376,21 +400,10 @@ func (p *Player) Next() {
 	p.load(at)
 }
 
+// Prev plays the track before this one, however far this one has played:
+// once a few seconds in, going back to its start only kept the listener
+// pressing twice.
 func (p *Player) Prev() {
-	if len(p.order) == 0 {
-		return
-	}
-	// As every player does: the start of this track, then the one before.
-	if p.Position() > 3*time.Second {
-		p.Seek(0)
-		return
-	}
-	p.PrevTrack()
-}
-
-// PrevTrack plays the track before this one, however far this one has
-// played, as flicking the cover back does.
-func (p *Player) PrevTrack() {
 	if len(p.order) == 0 {
 		return
 	}
@@ -626,11 +639,16 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 			if err != nil {
 				p.err = err.Error()
 				if errors.Is(err, netease.ErrUnavailable) {
-					p.err = "这首歌需要 VIP 才能播放"
-					// With sources on, the listener expects them tried,
-					// and told when they had nothing either.
-					if len(sources) > 0 {
-						p.err = "这首歌暂时无法播放，第三方音源也没有找到"
+					switch {
+					case t.ProgramID != 0:
+						p.err = "这期节目需要购买才能收听"
+					default:
+						p.err = "这首歌需要 VIP 才能播放"
+						// With sources on, the listener expects them tried,
+						// and told when they had nothing either.
+						if len(sources) > 0 {
+							p.err = "这首歌暂时无法播放，第三方音源也没有找到"
+						}
 					}
 				}
 				// Skip what cannot play, unless nothing in the queue can.
@@ -687,8 +705,8 @@ func (p *Player) open(t netease.Track, level string, sources []unblock.Source) (
 		if err != nil {
 			// Only a song NetEase won't serve falls back, and only with a
 			// source turned on: another failure is no reason to go looking
-			// for the song elsewhere.
-			if errors.Is(err, netease.ErrUnavailable) && len(sources) > 0 {
+			// for the song elsewhere. Episodes are not songs.
+			if errors.Is(err, netease.ErrUnavailable) && t.ProgramID == 0 && len(sources) > 0 {
 				if r, uerr := unblock.Resolve(t, sources); uerr == nil && r != nil {
 					info = &netease.Stream{
 						URL:    r.URL,

@@ -5,7 +5,10 @@
 ## 功能
 
 - 扫码登录，登录态保存在系统凭据存储中
-- 每日推荐、推荐歌单、排行榜、我的歌单、搜索
+- 每日推荐、推荐歌单、排行榜、我的歌单
+- 搜索单曲、歌手、专辑、用户与播客，输入时显示搜索建议，保留搜索历史
+- 歌手页的热门与最新歌曲、专辑与动态，关注歌手；专辑页与用户页
+- 播客：浏览与收听节目，订阅播客；在本机把节目转写成字幕（Qwen3-ASR），像歌词一样随播放滚动
 - 私人 FM（推荐 / 熟悉 / 探索）与心动模式
 - 边下边播，支持标准 / 较高 / 极高 / 无损（FLAC）/ Hi-Res 音质
 - 灰色歌曲解锁：网易云无版权或下架的歌曲，从 pyncmd、酷我、酷狗等第三方音源匹配播放（默认开启，可在设置中关闭）
@@ -33,6 +36,7 @@ go test ./...        # 运行测试
 - [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)：eapi 加密与登录流程的参考
 - [folia-major](https://github.com/chthollyphile/folia-major)：歌词动画效果的参考
 - [UnblockNeteaseMusic](https://github.com/UnblockNeteaseMusic/server)：灰色歌曲的第三方音源与酷我查询加密的参考；酷我加密的移植按 LGPL-3.0 授权，许可证见 `internal/unblock/COPYING.LESSER`
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)、[Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) 与 [Silero VAD](https://github.com/snakers4/silero-vad)：本机语音识别
 
 本项目与网易云音乐官方无关，音乐版权归各权利人所有。
 
