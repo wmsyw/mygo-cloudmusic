@@ -59,7 +59,7 @@ func (a *app) nowPlayingLayer(c *ui.Context, open, settled bool) {
 	if !open && settled || a.pl.Current() == nil {
 		// Closed: nothing to paint or click.
 		layer.Invisible()
-		a.queueAt = -1
+		a.queueAt, a.wallState.track = -1, 0
 		return
 	}
 	if !open {
@@ -107,6 +107,8 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 	// An episode has what it is about and its captions in place of lyrics;
 	// a song, lyrics in place of those.
 	switch program := tr.ProgramID != 0; {
+	case program && a.npPane == paneWall:
+		a.npPane = paneQueue
 	case program && (a.npPane == paneLyrics || a.npPane == paneStage):
 		a.npPane = paneProgram
 		if a.captionsOn() {
@@ -119,6 +121,9 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 	}
 	if a.npPane != paneQueue {
 		a.queueAt = -1
+	}
+	if a.npPane != paneWall {
+		a.wallState.track = 0
 	}
 	{
 		// The top strip drags the window; the chevron closes the view,
@@ -139,6 +144,11 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 			})
 			a.stage(c, tr, accent)
 			a.stageBar(c, tr, art, accent)
+			return
+		}
+		if a.npPane == paneWall {
+			// The wall takes the whole view too, under the song playing.
+			a.wallPane(c, tr, art, accent, w, h, pointerIn)
 			return
 		}
 
@@ -199,7 +209,13 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				} else {
 					c.AnimationFrame() // not laid out yet: the next frame places it
 				}
-				reveal(tabs.Top(a.npPaneTop-8-tb.H), pointerIn).Children(func() { a.paneTabs(c) })
+				// Built anew, back from another pane, the tabs are not laid out
+				// yet: they take their height from the last time, rather than
+				// showing lower for a frame and rising.
+				if tb.H > 0 {
+					a.npTabsH = tb.H
+				}
+				reveal(tabs.Top(a.npPaneTop-8-a.npTabsH), pointerIn).Children(func() { a.paneTabs(c) })
 				ui.Box(c).Height(a.npPaneTop)
 				switch a.npPane {
 				case paneLyrics:
@@ -246,22 +262,46 @@ const (
 	paneComments
 	paneProgram
 	paneCaptions
+	paneWall
 )
 
-func (a *app) paneTabs(c *ui.Context) {
+// npTab is a tab of Now Playing: its pane, and what it says.
+type npTab struct {
+	pane  int
+	label string
+}
+
+// npTabs returns the tabs of Now Playing, in order, for what plays: ⌘1
+// chooses the first, ⌘2 the second, and on.
+func (a *app) npTabs() []npTab {
 	if tr := a.pl.Current(); tr != nil && tr.ProgramID != 0 {
-		a.paneTab(c, paneProgram, "简介")
+		tabs := []npTab{{paneProgram, "简介"}}
 		if a.captionsShown() {
-			a.paneTab(c, paneCaptions, "字幕")
+			tabs = append(tabs, npTab{paneCaptions, "字幕"})
 		}
-		a.paneTab(c, paneQueue, "待播清单")
-		a.paneTab(c, paneComments, a.commentsTab())
-		return
+		return append(tabs, npTab{paneQueue, "待播清单"}, npTab{paneComments, "评论"})
 	}
-	a.paneTab(c, paneLyrics, "歌词")
-	a.paneTab(c, paneStage, "律动")
-	a.paneTab(c, paneQueue, "待播清单")
-	a.paneTab(c, paneComments, a.commentsTab())
+	return []npTab{{paneLyrics, "歌词"}, {paneStage, "律动"}, {paneQueue, "待播清单"}, {paneWall, "选歌"}, {paneComments, "评论"}}
+}
+
+func (a *app) paneTabs(c *ui.Context) {
+	for _, t := range a.npTabs() {
+		label := t.label
+		if t.pane == paneComments {
+			label = a.commentsTab()
+		}
+		a.paneTab(c, t.pane, label)
+	}
+}
+
+// choosePane shows pane i in Now Playing, remembering lyrics or the stage,
+// whichever was chosen, for the next song.
+func (a *app) choosePane(i int) {
+	a.npPane = i
+	if (i == paneLyrics || i == paneStage) && a.settings.LyricsStage != (i == paneStage) {
+		a.settings.LyricsStage = i == paneStage
+		a.settings.save()
+	}
 }
 
 // radioChip says which radio plays, over the title: a click on it, or on
@@ -360,11 +400,7 @@ func (a *app) paneTab(c *ui.Context, i int, label string) {
 		rollCount(c, &a.tabCount, n, text, fg)
 	})
 	if b.Clicked() {
-		a.npPane = i
-		if (i == paneLyrics || i == paneStage) && a.settings.LyricsStage != (i == paneStage) {
-			a.settings.LyricsStage = i == paneStage
-			a.settings.save()
-		}
+		a.choosePane(i)
 	}
 }
 
